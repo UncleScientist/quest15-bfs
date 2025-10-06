@@ -31,21 +31,32 @@ enum Message {
     Tick,
 }
 
+type SearchState = (u64, (i64, i64));
+
 #[derive(Debug)]
 struct GardenDisplay {
     cache: Cache,
     garden: Garden,
     running: bool,
     iterations: usize,
-    queue: VecDeque<(usize, (u64, (i64, i64)))>,
-    state_visited: HashSet<(u64, (i64, i64))>,
+    queue: VecDeque<(usize, SearchState)>,
+    state_visited: HashSet<SearchState>,
     loc_visited: HashSet<(i64, i64)>,
+    display: Vec<Vec<Color>>,
 }
 
 impl Default for GardenDisplay {
     fn default() -> Self {
-        let data = std::fs::read_to_string("input/everybody_codes_e2024_q15_p2.txt").expect("file");
+        let args = std::env::args().collect::<Vec<_>>();
+        if args.len() != 2 {
+            println!("specify which number");
+            std::process::exit(1);
+        }
+
+        let filename = format!("input/everybody_codes_e2024_q15_p{}.txt", args[1]);
+        let data = std::fs::read_to_string(filename).expect("file");
         let garden = Garden::parse(&data);
+        let (rows, cols) = garden.size;
 
         let queue = VecDeque::from([(0usize, (garden.herb_types, garden.start))]);
 
@@ -57,6 +68,7 @@ impl Default for GardenDisplay {
             queue,
             state_visited: HashSet::new(),
             loc_visited: HashSet::new(),
+            display: vec![vec![Color::BLACK; cols]; rows],
         }
     }
 }
@@ -67,7 +79,7 @@ impl GardenDisplay {
             Message::Tick => {
                 if self.running {
                     self.cache.clear();
-                    for _ in 0..5 {
+                    for _ in 0..10 {
                         self.iterations += 1;
                         match self.step() {
                             SearchResult::Found(steps) => {
@@ -83,6 +95,23 @@ impl GardenDisplay {
                             }
                         }
                     }
+
+                    for loc in &self.garden.maze {
+                        self.display[loc.0 as usize][loc.1 as usize] = color!(0x005000);
+                    }
+
+                    for loc in &self.loc_visited {
+                        self.display[loc.0 as usize][loc.1 as usize] = color!(0x008000);
+                    }
+
+                    for (loc, value) in &self.garden.herbs {
+                        let idx = (*value as u8 - b'A') as usize;
+                        self.display[loc.0 as usize][loc.1 as usize] = COLOR_LIST[idx];
+                    }
+
+                    for (_, (_, loc)) in &self.queue {
+                        self.display[loc.0 as usize][loc.1 as usize] = color!(0x0000a0);
+                    }
                 }
             }
         }
@@ -97,7 +126,7 @@ impl GardenDisplay {
     }
 
     fn subscription(&self) -> Subscription<Message> {
-        iced::time::every(std::time::Duration::from_millis(25)).map(|_| Message::Tick)
+        iced::time::every(std::time::Duration::from_millis(10)).map(|_| Message::Tick)
     }
 
     fn step(&mut self) -> SearchResult {
@@ -120,7 +149,55 @@ impl GardenDisplay {
     }
 }
 
-const COLOR_LIST: [Color; 8] = [
+const COLOR_LIST: [Color; 24] = [
+    Color {
+        r: 0.7,
+        g: 0.4,
+        b: 1.0,
+        a: 1.0,
+    },
+    Color {
+        r: 0.7,
+        g: 0.4,
+        b: 1.0,
+        a: 1.0,
+    },
+    Color {
+        r: 0.6,
+        g: 0.5,
+        b: 0.9,
+        a: 1.0,
+    },
+    Color {
+        r: 0.5,
+        g: 0.6,
+        b: 0.8,
+        a: 1.0,
+    },
+    Color {
+        r: 0.7,
+        g: 0.4,
+        b: 1.0,
+        a: 1.0,
+    },
+    Color {
+        r: 0.6,
+        g: 0.5,
+        b: 0.9,
+        a: 1.0,
+    },
+    Color {
+        r: 0.5,
+        g: 0.6,
+        b: 0.8,
+        a: 1.0,
+    },
+    Color {
+        r: 0.4,
+        g: 0.7,
+        b: 0.7,
+        a: 1.0,
+    },
     Color {
         r: 0.7,
         g: 0.4,
@@ -169,6 +246,54 @@ const COLOR_LIST: [Color; 8] = [
         b: 0.3,
         a: 1.0,
     },
+    Color {
+        r: 0.6,
+        g: 0.5,
+        b: 0.9,
+        a: 1.0,
+    },
+    Color {
+        r: 0.5,
+        g: 0.6,
+        b: 0.8,
+        a: 1.0,
+    },
+    Color {
+        r: 0.4,
+        g: 0.7,
+        b: 0.7,
+        a: 1.0,
+    },
+    Color {
+        r: 0.3,
+        g: 0.8,
+        b: 0.6,
+        a: 1.0,
+    },
+    Color {
+        r: 0.2,
+        g: 0.9,
+        b: 0.5,
+        a: 1.0,
+    },
+    Color {
+        r: 0.1,
+        g: 1.0,
+        b: 0.4,
+        a: 1.0,
+    },
+    Color {
+        r: 0.0,
+        g: 0.9,
+        b: 0.3,
+        a: 1.0,
+    },
+    Color {
+        r: 1.0,
+        g: 0.9,
+        b: 0.3,
+        a: 1.0,
+    },
 ];
 
 impl Program<Message> for GardenDisplay {
@@ -187,25 +312,12 @@ impl Program<Message> for GardenDisplay {
             let xscale = scale.width / self.garden.size.1 as f32;
             let yscale = scale.height / self.garden.size.0 as f32;
             let square = Size::new(xscale - 1.0, yscale - 1.0);
-            for loc in &self.garden.maze {
-                let point = Point::new(loc.1 as f32 * xscale, loc.0 as f32 * yscale);
-                frame.fill_rectangle(point, square, color!(0x005000));
-            }
 
-            for loc in &self.loc_visited {
-                let point = Point::new(loc.1 as f32 * xscale, loc.0 as f32 * yscale);
-                frame.fill_rectangle(point, square, color!(0x008000));
-            }
-
-            for (loc, value) in &self.garden.herbs {
-                let point = Point::new(loc.1 as f32 * xscale, loc.0 as f32 * yscale);
-                let idx = (*value as u8 - b'A') as usize;
-                frame.fill_rectangle(point, square, COLOR_LIST[idx]);
-            }
-
-            for (_, (_, loc)) in &self.queue {
-                let point = Point::new(loc.1 as f32 * xscale, loc.0 as f32 * yscale);
-                frame.fill_rectangle(point, square, color!(0x0000a0));
+            for (row, line) in self.display.iter().enumerate() {
+                for (col, color) in line.iter().enumerate() {
+                    let point = Point::new(col as f32 * xscale, row as f32 * yscale);
+                    frame.fill_rectangle(point, square, *color);
+                }
             }
         });
 
