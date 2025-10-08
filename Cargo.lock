@@ -91,6 +91,11 @@ dependencies = [
 ]
 
 [[package]]
+name = "aoclib"
+version = "0.1.0"
+source = "git+https://github.com/UncleScientist/aoclib-rs.git#8229adbcb3adcbc1d675324d02c833901ec31738"
+
+[[package]]
 name = "approx"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2615,6 +2620,7 @@ checksum = "3eb8486b569e12e2c32ad3e204dbaba5e4b5b216e9367044f25f1dba42341773"
 name = "quest15-bfs"
 version = "0.1.0"
 dependencies = [
+ "aoclib",
  "iced",
 ]
 

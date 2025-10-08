@@ -1,17 +1,23 @@
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use iced::{
-    color, mouse,
+    Color, Element, Length, Point, Renderer, Size, Subscription, Task, Theme, color, mouse,
     widget::{
-        canvas::{Cache, Program},
         Canvas,
+        canvas::{Cache, Program},
     },
-    Color, Element, Length, Point, Renderer, Size, Subscription, Task, Theme,
 };
 
 use crate::garden::Garden;
 
 mod garden;
+
+#[derive(Debug, PartialEq)]
+enum FindPhase {
+    Neighbors,
+    Path,
+    Done,
+}
 
 fn main() {
     let _ = iced::application("BFS Viz", GardenDisplay::update, GardenDisplay::view)
@@ -23,7 +29,7 @@ fn main() {
 enum SearchResult {
     Found(usize),
     Continue,
-    Failed,
+    Finished,
 }
 
 #[derive(Debug)]
@@ -31,22 +37,30 @@ enum Message {
     Tick,
 }
 
-type SearchState = (u64, (i64, i64));
+type Position = (i64, i64);
+type SearchState = (u64, Position);
 
 #[derive(Debug)]
 struct GardenDisplay {
     cache: Cache,
     garden: Garden,
-    running: bool,
+    running: FindPhase,
     iterations: usize,
     queue: VecDeque<(usize, SearchState)>,
     state_visited: HashSet<SearchState>,
-    loc_visited: HashSet<(i64, i64)>,
+    loc_visited: HashSet<Position>,
     display: Vec<Vec<Color>>,
+    starting_points: Vec<(char, Position)>,
+    full_search: bool,
+    current_type: char,
+    current_start: Position,
+    neighbor_list: HashMap<Position, Vec<(usize, Position)>>, // dist & position
 }
 
 impl Default for GardenDisplay {
     fn default() -> Self {
+        let full_search = std::env::var_os("FULL").is_some();
+
         let args = std::env::args().collect::<Vec<_>>();
         if args.len() != 2 {
             println!("specify which number");
@@ -58,17 +72,27 @@ impl Default for GardenDisplay {
         let garden = Garden::parse(&data);
         let (rows, cols) = garden.size;
 
-        let queue = VecDeque::from([(0usize, (garden.herb_types, garden.start))]);
+        let starting_points = garden
+            .herbs
+            .iter()
+            .chain([(&garden.start, &'[')])
+            .map(|(pos, herbtype)| (*herbtype, *pos))
+            .collect();
 
         Self {
             cache: Cache::default(),
             garden,
-            running: true,
+            running: FindPhase::Neighbors,
             iterations: 0,
-            queue,
+            queue: VecDeque::new(),
             state_visited: HashSet::new(),
             loc_visited: HashSet::new(),
             display: vec![vec![Color::BLACK; cols]; rows],
+            starting_points,
+            full_search,
+            current_start: (0, 0),
+            current_type: ' ',
+            neighbor_list: HashMap::new(),
         }
     }
 }
@@ -77,31 +101,20 @@ impl GardenDisplay {
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Tick => {
-                if self.running {
+                if self.running != FindPhase::Done {
+                    let visited_color =
+                        [color!(0x008000), color!(0x005000)][self.starting_points.len() % 2];
+                    let unvisited_color =
+                        [color!(0x005000), color!(0x008000)][self.starting_points.len() % 2];
                     self.cache.clear();
-                    for _ in 0..10 {
-                        self.iterations += 1;
-                        match self.step() {
-                            SearchResult::Found(steps) => {
-                                println!(
-                                    "found in {steps} steps, after {} iterations",
-                                    self.iterations
-                                );
-                                self.running = false;
-                            }
-                            SearchResult::Continue => {}
-                            SearchResult::Failed => {
-                                self.running = false;
-                            }
-                        }
-                    }
+                    self.tick();
 
                     for loc in &self.garden.maze {
-                        self.display[loc.0 as usize][loc.1 as usize] = color!(0x005000);
+                        self.display[loc.0 as usize][loc.1 as usize] = unvisited_color;
                     }
 
                     for loc in &self.loc_visited {
-                        self.display[loc.0 as usize][loc.1 as usize] = color!(0x008000);
+                        self.display[loc.0 as usize][loc.1 as usize] = visited_color;
                     }
 
                     for (loc, value) in &self.garden.herbs {
@@ -112,10 +125,84 @@ impl GardenDisplay {
                     for (_, (_, loc)) in &self.queue {
                         self.display[loc.0 as usize][loc.1 as usize] = color!(0x0000a0);
                     }
+
+                    for loc in self.neighbor_list.keys() {
+                        self.display[loc.0 as usize][loc.1 as usize] = color!(0xff0000);
+                    }
                 }
             }
         }
         Task::none()
+    }
+
+    fn tick(&mut self) {
+        match self.running {
+            FindPhase::Neighbors => {
+                for _ in 0..50 {
+                    self.iterations += 1;
+                    match if self.full_search {
+                        self.step()
+                    } else {
+                        self.simple_step()
+                    } {
+                        SearchResult::Found(steps) => {
+                            println!(
+                                "found in {steps} steps, after {} iterations",
+                                self.iterations
+                            );
+                            self.running = FindPhase::Done;
+                        }
+                        SearchResult::Continue => {}
+                        SearchResult::Finished => {
+                            self.running = FindPhase::Path;
+                            break;
+                        }
+                    }
+                }
+            }
+            FindPhase::Path => {
+                if let Some(result) = aoclib::ucs(
+                    &(self.garden.herb_types, self.garden.start),
+                    |(remaining, pos)| {
+                        let Some(neighbors) = self.neighbor_list.get(pos) else {
+                            panic!("found pos {pos:?} with no neighbors");
+                        };
+                        neighbors
+                            .iter()
+                            .filter_map(|(dist, next_pos)| {
+                                if *next_pos == self.garden.start {
+                                    if *remaining == 0 {
+                                        Some(((0, *next_pos), *dist))
+                                    } else {
+                                        None
+                                    }
+                                } else {
+                                    let Some(chbit) = self.garden.herbs.get(next_pos) else {
+                                        panic!("Found {next_pos:?} without a herb there");
+                                    };
+                                    let bit = 1u64 << (*chbit as u8 - b'A');
+                                    if *remaining & bit != 0 {
+                                        let next_remaining = *remaining & !bit;
+                                        Some(((next_remaining, *next_pos), *dist))
+                                    } else {
+                                        None
+                                    }
+                                }
+                            })
+                            .collect()
+                    },
+                    |(remaining, pos)| *remaining == 0 && *pos == self.garden.start,
+                ) {
+                    println!("total distance = {}", result.1);
+                } else {
+                    println!("path not found");
+                }
+                self.running = FindPhase::Done;
+            }
+            FindPhase::Done => {
+                unreachable!()
+            }
+        }
     }
 
     fn view(&self) -> Element<'_, Message> {
@@ -127,6 +214,58 @@ impl GardenDisplay {
 
     fn subscription(&self) -> Subscription<Message> {
         iced::time::every(std::time::Duration::from_millis(10)).map(|_| Message::Tick)
+    }
+
+    fn simple_step(&mut self) -> SearchResult {
+        if self.queue.is_empty()
+            && let Some((herb_type, next_pos)) = self.starting_points.pop()
+        {
+            // println!("next starting point {next_pos:?}");
+            self.loc_visited.clear();
+            self.state_visited.clear();
+            self.current_type = herb_type;
+            self.current_start = next_pos;
+            self.queue.push_back((0, (0, next_pos)));
+            self.neighbor_list.insert(self.current_start, Vec::new());
+        }
+
+        if let Some((dist, (_, pos))) = self.queue.pop_front() {
+            if self.state_visited.insert((0, pos)) {
+                if let Some(herb) = self.garden.herbs.get(&pos) {
+                    if *herb != self.current_type {
+                        self.neighbor_list
+                            .entry(self.current_start)
+                            .or_default()
+                            .push((dist, pos));
+                    }
+                    // println!("Found {herb} at distance {dist} @ {pos:?}");
+                } else if pos == self.garden.start && self.current_type != '[' {
+                    self.neighbor_list
+                        .entry(self.current_start)
+                        .or_default()
+                        .push((dist, pos));
+                }
+                self.loc_visited.insert(pos);
+                for neighbor in self.garden.all_neighbors(&pos) {
+                    if !self.state_visited.contains(&(0, neighbor)) {
+                        self.queue.push_back((dist + 1, (0, neighbor)));
+                    }
+                }
+            }
+            //            if self.queue.is_empty() {
+            //                println!(
+            //                    "For herb {} at position {:?}, these are the neighbors:",
+            //                    self.current_type, self.current_start
+            //                );
+            //                println!("{:?}", self.neighbor_list.get(&self.current_start));
+            //                // std::process::exit(0);
+            //            }
+            SearchResult::Continue
+        } else if self.starting_points.is_empty() {
+            SearchResult::Finished
+        } else {
+            SearchResult::Continue
+        }
     }
 
     fn step(&mut self) -> SearchResult {
@@ -144,7 +283,7 @@ impl GardenDisplay {
             }
             SearchResult::Continue
         } else {
-            SearchResult::Failed
+            SearchResult::Finished
         }
     }
 }

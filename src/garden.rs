@@ -69,6 +69,20 @@ impl Garden {
             .collect()
     }
 
+    pub fn all_neighbors(&self, pos: &(i64, i64)) -> Vec<(i64, i64)> {
+        [(-1, 0), (1, 0), (0, -1), (0, 1)]
+            .iter()
+            .filter_map(|delta| {
+                let next = (pos.0 + delta.0, pos.1 + delta.1);
+                if self.maze.contains(&next) {
+                    Some(next)
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
     pub fn is_end(&self, (remaining, pos): &(u64, (i64, i64))) -> bool {
         *remaining == 0 && *pos == self.start
     }
