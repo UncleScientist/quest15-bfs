@@ -102,12 +102,14 @@ impl GardenDisplay {
         match message {
             Message::Tick => {
                 if self.running != FindPhase::Done {
+                    self.tick();
+
                     let visited_color =
                         [color!(0x008000), color!(0x005000)][self.starting_points.len() % 2];
                     let unvisited_color =
                         [color!(0x005000), color!(0x008000)][self.starting_points.len() % 2];
+
                     self.cache.clear();
-                    self.tick();
 
                     for loc in &self.garden.maze {
                         self.display[loc.0 as usize][loc.1 as usize] = unvisited_color;
