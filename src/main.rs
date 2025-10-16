@@ -290,151 +290,60 @@ impl GardenDisplay {
     }
 }
 
+// Adapted from https://stackoverflow.com/questions/51203917/math-behind-hsv-to-rgb-conversion-of-colors
+// h: 0..360, s & v: 0..100
+const fn hsv_to_rgb(h: f32, s: f32, v: f32) -> Color {
+    let h = h / 360.0;
+    let s = s / 100.0;
+    let v = v / 100.0;
+
+    let i = (h * 6.0).floor();
+    let f = h * 6.0 - i;
+    let p = v * (1.0 - s);
+    let q = v * (1.0 - f * s);
+    let t = v * (1.0 - (1.0 - f) * s);
+
+    let v = v * 255.0;
+    let t = t * 255.0;
+    let p = p * 255.0;
+    let q = q * 255.0;
+
+    match (i as u32) % 6 {
+        0 => color!(v, t, p),
+        1 => color!(q, v, p),
+        2 => color!(p, v, t),
+        3 => color!(p, q, v),
+        4 => color!(t, p, v),
+        5 => color!(v, p, q),
+        _ => panic!("bug in compiler"),
+    }
+}
+
 const COLOR_LIST: [Color; 24] = [
-    Color {
-        r: 0.7,
-        g: 0.4,
-        b: 1.0,
-        a: 1.0,
-    },
-    Color {
-        r: 0.7,
-        g: 0.4,
-        b: 1.0,
-        a: 1.0,
-    },
-    Color {
-        r: 0.6,
-        g: 0.5,
-        b: 0.9,
-        a: 1.0,
-    },
-    Color {
-        r: 0.5,
-        g: 0.6,
-        b: 0.8,
-        a: 1.0,
-    },
-    Color {
-        r: 0.7,
-        g: 0.4,
-        b: 1.0,
-        a: 1.0,
-    },
-    Color {
-        r: 0.6,
-        g: 0.5,
-        b: 0.9,
-        a: 1.0,
-    },
-    Color {
-        r: 0.5,
-        g: 0.6,
-        b: 0.8,
-        a: 1.0,
-    },
-    Color {
-        r: 0.4,
-        g: 0.7,
-        b: 0.7,
-        a: 1.0,
-    },
-    Color {
-        r: 0.7,
-        g: 0.4,
-        b: 1.0,
-        a: 1.0,
-    },
-    Color {
-        r: 0.6,
-        g: 0.5,
-        b: 0.9,
-        a: 1.0,
-    },
-    Color {
-        r: 0.5,
-        g: 0.6,
-        b: 0.8,
-        a: 1.0,
-    },
-    Color {
-        r: 0.4,
-        g: 0.7,
-        b: 0.7,
-        a: 1.0,
-    },
-    Color {
-        r: 0.3,
-        g: 0.8,
-        b: 0.6,
-        a: 1.0,
-    },
-    Color {
-        r: 0.2,
-        g: 0.9,
-        b: 0.5,
-        a: 1.0,
-    },
-    Color {
-        r: 0.1,
-        g: 1.0,
-        b: 0.4,
-        a: 1.0,
-    },
-    Color {
-        r: 0.0,
-        g: 0.9,
-        b: 0.3,
-        a: 1.0,
-    },
-    Color {
-        r: 0.6,
-        g: 0.5,
-        b: 0.9,
-        a: 1.0,
-    },
-    Color {
-        r: 0.5,
-        g: 0.6,
-        b: 0.8,
-        a: 1.0,
-    },
-    Color {
-        r: 0.4,
-        g: 0.7,
-        b: 0.7,
-        a: 1.0,
-    },
-    Color {
-        r: 0.3,
-        g: 0.8,
-        b: 0.6,
-        a: 1.0,
-    },
-    Color {
-        r: 0.2,
-        g: 0.9,
-        b: 0.5,
-        a: 1.0,
-    },
-    Color {
-        r: 0.1,
-        g: 1.0,
-        b: 0.4,
-        a: 1.0,
-    },
-    Color {
-        r: 0.0,
-        g: 0.9,
-        b: 0.3,
-        a: 1.0,
-    },
-    Color {
-        r: 1.0,
-        g: 0.9,
-        b: 0.3,
-        a: 1.0,
-    },
+    hsv_to_rgb(60.0, 100.0, 100.0),
+    hsv_to_rgb(90.0, 100.0, 100.0),
+    hsv_to_rgb(180.0, 100.0, 100.0),
+    hsv_to_rgb(270.0, 100.0, 100.0),
+    hsv_to_rgb(70.0, 100.0, 100.0),
+    hsv_to_rgb(100.0, 100.0, 100.0),
+    hsv_to_rgb(190.0, 100.0, 100.0),
+    hsv_to_rgb(280.0, 100.0, 100.0),
+    hsv_to_rgb(80.0, 100.0, 100.0),
+    hsv_to_rgb(110.0, 100.0, 100.0),
+    hsv_to_rgb(200.0, 100.0, 100.0),
+    hsv_to_rgb(290.0, 100.0, 100.0),
+    hsv_to_rgb(90.0, 100.0, 100.0),
+    hsv_to_rgb(120.0, 100.0, 100.0),
+    hsv_to_rgb(210.0, 100.0, 100.0),
+    hsv_to_rgb(300.0, 100.0, 100.0),
+    hsv_to_rgb(150.0, 100.0, 100.0),
+    hsv_to_rgb(130.0, 100.0, 100.0),
+    hsv_to_rgb(220.0, 100.0, 100.0),
+    hsv_to_rgb(310.0, 100.0, 100.0),
+    hsv_to_rgb(160.0, 100.0, 100.0),
+    hsv_to_rgb(140.0, 100.0, 100.0),
+    hsv_to_rgb(230.0, 100.0, 100.0),
+    hsv_to_rgb(320.0, 100.0, 100.0),
 ];
 
 impl Program<Message> for GardenDisplay {
